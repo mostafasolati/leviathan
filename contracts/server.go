@@ -77,6 +77,8 @@ type IServerContainer interface {
 	// Route registers a route to a corresponding handler
 	Route(method, path string, handler Handler)
 
+	SecureRoutes(routes map[string][]string)
+
 	// Run starts http server
 	Run(address string)
 

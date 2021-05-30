@@ -44,29 +44,23 @@ func NewEchoServerContainer(
 }
 
 // SecureRoutes restrict access to certain routes by allowing access only to specified roles
-func (s *serverContainer) SecureRoutes(routes map[string][]models.TypeRole) {
+func (s *serverContainer) SecureRoutes(routes map[string][]string) {
 
-	//config := middleware.JWTConfig{
-	//	Claims:     &models.UserClaims{},
-	//	SigningKey: []byte(s.configService.String(CPAccountingSecret)),
-	//	Skipper: func(c echo.Context) bool {
-	//		// Skip requests with no token.
-	//		return c.Request().Header.Get("Authorization") == ""
-	//	},
-	//}
-	//
-	//for route, roles := range routes {
-	//	g := s.e.Group(route, middleware.JWTWithConfig(config))
-	//
-	//	parts := strings.Split(route, "/")
-	//	lastPart := parts[len(parts)-1]
-	//	if lastPart == "admin" {
-	//		g.Use(adminACL(acl))
-	//	} else {
-	//		g.Use(accessMiddleware(acl, roles))
-	//	}
-	//	s.groups[route] = g
-	//}
+	config := middleware.JWTConfig{
+		Claims:     &models.UserClaims{},
+		SigningKey: []byte(s.configService.String("auth.jwt_secret")),
+		Skipper: func(c echo.Context) bool {
+			// Skip requests with no token.
+			return c.Request().Header.Get("Authorization") == ""
+		},
+	}
+
+	for route, roles := range routes {
+		g := s.e.Group(route, middleware.JWTWithConfig(config))
+
+		g.Use(accessMiddleware(roles))
+		s.groups[route] = g
+	}
 }
 
 // Route s a method to define a route for an API endpoint
@@ -121,7 +115,7 @@ func (s *serverContainer) TestServer() *httptest.Server {
 	return httptest.NewServer(s.e.Server.Handler)
 }
 
-func accessMiddleware(roles []models.TypeRole) echo.MiddlewareFunc {
+func accessMiddleware(roles []string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 
@@ -136,7 +130,7 @@ func accessMiddleware(roles []models.TypeRole) echo.MiddlewareFunc {
 
 			for _, role := range roles {
 				for _, r := range user.Roles {
-					if strings.EqualFold(role.Name(), r) {
+					if strings.EqualFold(role, r) {
 						return next(c)
 					}
 				}

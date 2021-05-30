@@ -27,16 +27,16 @@ type configService struct {
 //
 // In each case, it watches for changes and updates configuration parameters
 // accordingly.
-func NewConfigService(path, filename string) contracts.IConfigService {
+func NewConfigService(filename string) contracts.IConfigService {
 	backend := viper.New()
-	addLocalConfigProvider(path, filename, backend)
+	addLocalConfigProvider(filename, backend)
 	return &configService{backend: backend}
 }
 
-func addLocalConfigProvider(path, filename string, backend *viper.Viper) {
+func addLocalConfigProvider(filename string, backend *viper.Viper) {
 	backend.SetConfigName(filename)
 	backend.SetConfigType("yaml")
-	backend.AddConfigPath(path)
+	backend.AddConfigPath(".")
 	if err := backend.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Println("cannot find config file")

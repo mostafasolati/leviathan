@@ -2,5 +2,6 @@ package contracts
 
 type ILeviathan interface {
 	Config() IConfigService
-	ServerContainer() IServerContainer
+	Server() IServerContainer
+	Logger() ILogger
 }

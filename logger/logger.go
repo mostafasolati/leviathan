@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"log"
 	"log/syslog"
 	"strings"
 
@@ -65,7 +66,7 @@ type logger struct {
 }
 
 // NewLogger creates a new ILogger.
-func NewLogger(configService contracts.IConfigService) (contracts.ILogger, error) {
+func NewLogger(configService contracts.IConfigService) contracts.ILogger {
 	appender := configService.String(CPLogAppender)
 	factory, ok := logBackendFactories[appender]
 	if !ok {
@@ -73,10 +74,10 @@ func NewLogger(configService contracts.IConfigService) (contracts.ILogger, error
 	}
 	backend, err := factory(configService)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 	backend.Level = logLevelFromConfig(configService)
-	return &logger{backend: backend}, nil
+	return &logger{backend: backend}
 }
 
 func logLevelFromConfig(config contracts.IConfigService) logrus.Level {
