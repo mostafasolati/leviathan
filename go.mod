@@ -8,6 +8,7 @@ require (
 	github.com/dongri/phonenumber v0.0.0-20210304071411-690733f34185
 	github.com/elastic/go-elasticsearch/v7 v7.8.0
 	github.com/google/wire v0.5.0
+	github.com/kavenegar/kavenegar-go v0.0.0-20200629080648-6e28263b7162 // indirect
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/labstack/gommon v0.3.0 // indirect
 	github.com/lanziliang/logrus-rollingfile-hook v0.0.0-20181010120248-c944a72bb4e4

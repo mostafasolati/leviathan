@@ -6,19 +6,25 @@
 package leviathan
 
 import (
+	"github.com/mostafasolati/leviathan/auth"
 	"github.com/mostafasolati/leviathan/config"
 	"github.com/mostafasolati/leviathan/contracts"
 	"github.com/mostafasolati/leviathan/logger"
+	"github.com/mostafasolati/leviathan/notification"
 	"github.com/mostafasolati/leviathan/server"
+	"github.com/mostafasolati/leviathan/user"
 )
 
 // Injectors from main.go:
 
-func Init(filename string) contracts.ILeviathan {
+func Init(filename string, apiKey notification.ApikeyType) contracts.ILeviathan {
 	iConfigService := config.NewConfigService(filename)
 	iLogger := logger.NewLogger(iConfigService)
 	iServerContainer := services.NewEchoServerContainer(iConfigService, iLogger)
-	iLeviathan := NewLeviathan(iConfigService, iLogger, iServerContainer)
+	iUserService := user.NewUserService()
+	iNotificationService := notification.NewKavenegar(apiKey)
+	iAuth := auth.NewAuthService(iConfigService, iLogger, iUserService, iNotificationService)
+	iLeviathan := NewLeviathan(iConfigService, iLogger, iServerContainer, iUserService, iAuth)
 	return iLeviathan
 }
 
@@ -28,16 +34,30 @@ type leviathan struct {
 	config          contracts.IConfigService
 	logger          contracts.ILogger
 	serverContainer contracts.IServerContainer
+	user            contracts.IUserService
+	auth            contracts.IAuth
 }
 
 func NewLeviathan(config2 contracts.IConfigService, logger2 contracts.ILogger,
 
 	serverContainer contracts.IServerContainer,
+	userService contracts.IUserService, auth2 contracts.IAuth,
+
 ) contracts.ILeviathan {
 	return &leviathan{
 		config: config2,
 		logger: logger2,
+		user:   userService,
+		auth:   auth2,
 	}
+}
+
+func (s *leviathan) Auth() contracts.IAuth {
+	return s.auth
+}
+
+func (s *leviathan) User() contracts.IUserService {
+	return s.user
 }
 
 func (s *leviathan) Logger() contracts.ILogger {

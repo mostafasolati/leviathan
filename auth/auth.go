@@ -1,10 +1,6 @@
 package auth
 
 import (
-	"bastek7/contracts"
-	"bastek7/lib/event"
-	"bastek7/lib/utils"
-	"bastek7/models"
 	"encoding/hex"
 	"math/rand"
 	"strconv"
@@ -12,35 +8,29 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-)
-
-const (
-	// CPAccountingSecret is the secret key to encode and decode JWT tokens
-	CPAccountingSecret = "accounting.secret"
-
-	// CPGuestExpireTimeout is the timeout (seconds) at-which guests expire.
-	CPGuestExpireTimeout = "accounting.guest.expire-timeout"
-
-	// CPJWTExpiration is the jwt expiration time in minute
-	CPJWTExpiration = "accounting.jwt-expiration"
+	"github.com/mostafasolati/leviathan/contracts"
+	"github.com/mostafasolati/leviathan/models"
+	"github.com/mostafasolati/leviathan/utils"
 )
 
 // NewAuthService creates a new IAccountingService.
 func NewAuthService(
 	config contracts.IConfigService,
 	logger contracts.ILogger,
-) contracts.IAccountingService {
-	service := &accounting{
-		config: config,
-		logger: logger,
+	userService contracts.IUserService,
+	notification contracts.INotificationService,
+) contracts.IAuth {
+	return &auth{
+		config:       config,
+		logger:       logger,
+		userService:  userService,
+		notification: notification,
 	}
-
-	return service
 }
 
 // FindOTPOfAUser implements IAccounting.FindOTPOfAUser
-func (a *accounting) FindOTPOfAUser(phone string) (string, error) {
-	otp, ok := a.otpMap.Load(phone)
+func (s *auth) FindOTPOfAUser(phone string) (string, error) {
+	otp, ok := s.otpMap.Load(phone)
 	if !ok || otp.(otpType).expireAt.Before(time.Now()) {
 		return "", contracts.ErrOTPNotFound
 	}
@@ -48,32 +38,28 @@ func (a *accounting) FindOTPOfAUser(phone string) (string, error) {
 }
 
 // SendOTP sends otp to user phone number
-func (a *accounting) SendOTP(phone string, app string) error {
+func (s *auth) SendOTP(phone string, app string) error {
 	phone = utils.NormalizePhoneNumber(phone)
 
-	validator := NewValidation()
-	validator.PhoneNumber(phone)
-	if err := validator.Validate(); err != nil {
-		return err
-	}
-
-	user, _ := a.storage.FindByPhone(phone)
-	if user != nil && user.DeletedAt != nil {
+	// Todo: validate phone number
+	user, _ := s.userService.FindByPhone(phone)
+	if user != nil && user.DeletedAt() != nil {
 		return contracts.ErrUserDeactivated
 	}
 
-	otp := a.generateOTP(phone)
-	event.Fire(&models.OTPEvent{Phone: phone, OTP: otp, App: app})
+	otp := s.generateOTP(phone)
+	// todo: send it via an event
+	s.notification.SendSMS(user.Phone, otp)
 	return nil
 }
 
 // NoSendOTP generates OTP for a phone number but doesn't send it.
-func (a *accounting) NoSendOTP(phone string) string {
-	return a.generateOTP(phone)
+func (s *auth) NoSendOTP(phone string) string {
+	return s.generateOTP(phone)
 }
 
 // LoginByOTP either register or login user by authenticating the otp sent in previous step
-func (a *accounting) LoginByOTP(phone, code string, guestID int) (token *models.Token, err error) {
+func (s *auth) LoginByOTP(phone, code string, guestID int) (token *models.Token, err error) {
 	phone = utils.NormalizePhoneNumber(phone)
 	validator := NewValidation()
 
@@ -82,12 +68,12 @@ func (a *accounting) LoginByOTP(phone, code string, guestID int) (token *models.
 		return nil, err
 	}
 
-	otp, ok := a.otpMap.Load(phone)
+	otp, ok := s.otpMap.Load(phone)
 	if !ok || otp.(otpType).code != code || otp.(otpType).expireAt.Before(time.Now()) {
 		return nil, contracts.ErrOTPIsIncorrect
 	}
 
-	user, err := a.storage.FindByPhone(phone)
+	user, err := s.storage.FindByPhone(phone)
 	if err != nil {
 		switch err {
 		case contracts.ErrUserNotFound:
@@ -95,7 +81,7 @@ func (a *accounting) LoginByOTP(phone, code string, guestID int) (token *models.
 			user = &models.User{
 				Phone: phone,
 			}
-			err = a.storage.Create(user)
+			err = s.storage.Create(user)
 			if err != nil {
 				return nil, err
 			}
@@ -109,26 +95,26 @@ func (a *accounting) LoginByOTP(phone, code string, guestID int) (token *models.
 		}
 	}
 
-	// create a new refresh token for user if not exists or expired
+	// create s new refresh token for user if not exists or expired
 	if user.RefreshTokenExpiry.Before(time.Now()) {
 		bs := make([]byte, 32)
 		rand.Read(bs)
 		user.RefreshToken = hex.EncodeToString(bs)
 		user.RefreshTokenExpiry = time.Now().Add(6 * 30 * 24 * time.Hour)
 
-		if err = a.storage.Update(user); err != nil {
+		if err = s.storage.Update(user); err != nil {
 			return nil, err
 		}
 	}
 
-	accessToken, err := a.createJwtToken(user)
+	accessToken, err := s.createJwtToken(user)
 	if err != nil {
 		return nil, err
 	}
 
 	if guestID != 0 {
 		// Remove the guest, as it is no longer needed.
-		if err = a.guestStorage.Remove(guestID); err != nil {
+		if err = s.guestStorage.Remove(guestID); err != nil {
 			return nil, err
 		}
 	}
@@ -145,18 +131,18 @@ func (a *accounting) LoginByOTP(phone, code string, guestID int) (token *models.
 }
 
 // RefreshToken return a new access token based on user refresh token
-func (a *accounting) RefreshToken(refreshToken string) (accessToken string, err error) {
-	user, err := a.storage.FindByRefreshToken(refreshToken)
+func (s *auth) RefreshToken(refreshToken string) (accessToken string, err error) {
+	user, err := s.storage.FindByRefreshToken(refreshToken)
 	if err != nil {
 		return "", err
 	}
 
-	return a.createJwtToken(user)
+	return s.createJwtToken(user)
 }
 
 // ParseToken validates the access token and extracts its claims.
-func (a *accounting) ParseToken(accessToken string) (*models.UserClaims, error) {
-	claims, err := a.parseJwtToken(accessToken)
+func (s *auth) ParseToken(accessToken string) (*models.UserClaims, error) {
+	claims, err := s.parseJwtToken(accessToken)
 	if err != nil {
 		return nil, contracts.ErrUnauthorized
 	}
@@ -170,27 +156,25 @@ type otpType struct {
 	expireAt time.Time
 }
 
-type accounting struct {
-	storage       contracts.IAccountingStorage
-	guestStorage  contracts.IGuestStorage
-	config        contracts.IConfigService
-	messageBroker contracts.IMessageBroker
-	otpMap        sync.Map
-	acl           contracts.IACL
-	logger        contracts.ILogger
+type auth struct {
+	config       contracts.IConfigService
+	otpMap       sync.Map
+	logger       contracts.ILogger
+	userService  contracts.IUserService
+	notification contracts.INotificationService
 }
 
 /********** Helper functions ***********/
 
 // A helper function to generate a random number
 // and store in a map of generated otps
-func (a *accounting) generateOTP(phone string) string {
+func (s *auth) generateOTP(phone string) string {
 
 	// search for existing otp in map
-	if otp, ok := a.otpMap.Load(phone); ok {
+	if otp, ok := s.otpMap.Load(phone); ok {
 		// if the existing code expired delete it otherwise return it
 		if otp.(otpType).expireAt.Before(time.Now()) {
-			a.otpMap.Delete(phone)
+			s.otpMap.Delete(phone)
 		} else {
 			return otp.(otpType).code
 		}
@@ -201,20 +185,20 @@ func (a *accounting) generateOTP(phone string) string {
 	n := rand.Intn(99999-10000) + 10000
 	otp := strconv.Itoa(n)
 
-	if !a.config.IsProduction() && phone == "09120000000" {
+	if !s.config.IsProduction() && phone == "09120000000" {
 		otp = "00000"
 	}
 
-	a.otpMap.Store(phone, otpType{code: otp, expireAt: time.Now().Add(10 * time.Minute)})
+	s.otpMap.Store(phone, otpType{code: otp, expireAt: time.Now().Add(10 * time.Minute)})
 
 	return otp
 }
 
-func (a *accounting) createJwtToken(user *models.User) (string, error) {
+func (s *auth) createJwtToken(user *models.User) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &models.UserClaims{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Duration(a.config.Int(CPJWTExpiration)) * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(time.Duration(s.config.Int(CPJWTExpiration)) * time.Minute).Unix(),
 		},
 
 		ID:    user.ID,
@@ -223,19 +207,19 @@ func (a *accounting) createJwtToken(user *models.User) (string, error) {
 		Phone: user.Phone,
 	})
 
-	// Sign and get the complete encoded token as a string using the secret
-	tokenString, err := token.SignedString([]byte(a.config.String(CPAccountingSecret)))
+	// Sign and get the complete encoded token as s string using the secret
+	tokenString, err := token.SignedString([]byte(s.config.String(CPAccountingSecret)))
 
 	return tokenString, err
 }
 
-func (a *accounting) parseJwtToken(accessToken string) (*models.UserClaims, error) {
+func (s *auth) parseJwtToken(accessToken string) (*models.UserClaims, error) {
 	var claims models.UserClaims
 	token, err := jwt.ParseWithClaims(accessToken, &claims, func(t *jwt.Token) (interface{}, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, jwt.ErrSignatureInvalid
 		}
-		return []byte(a.config.String(CPAccountingSecret)), nil
+		return []byte(s.config.String(CPAccountingSecret)), nil
 	})
 	if err != nil {
 		return nil, err
