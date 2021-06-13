@@ -27,9 +27,9 @@ type configService struct {
 //
 // In each case, it watches for changes and updates configuration parameters
 // accordingly.
-func NewConfigService(filename string) contracts.IConfigService {
+func NewConfigService() contracts.IConfigService {
 	backend := viper.New()
-	addLocalConfigProvider(filename, backend)
+	addLocalConfigProvider("./config.yml", backend)
 	return &configService{backend: backend}
 }
 

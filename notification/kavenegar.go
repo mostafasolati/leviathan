@@ -8,20 +8,23 @@ import (
 )
 
 type kavenegar struct {
-	api *kn.Kavenegar
+	api    *kn.Kavenegar
+	config contracts.IConfigService
 }
 
 type ApikeyType string
 
-func NewKavenegar(apikey ApikeyType) contracts.INotificationService {
+func NewKavenegar(config contracts.IConfigService) contracts.INotificationService {
+
 	return &kavenegar{
-		api: kn.New(apikey),
+		api:    kn.New(config.String("notification.sms.api_key")),
+		config: config,
 	}
 }
 
 func (k *kavenegar) Receive() (map[string]string, error) {
 	ret := make(map[string]string, 0)
-	messages, err := k.api.Message.Receive("100077070", true)
+	messages, err := k.api.Message.Receive(k.config.String("notification.sms.phone"), true)
 	if err != nil {
 		return nil, err
 	}
@@ -32,10 +35,10 @@ func (k *kavenegar) Receive() (map[string]string, error) {
 	return ret, nil
 }
 
-func (k *kavenegar) SendSMS(reciever []string, message string) error {
-	_, err := k.api.Message.Send("1000596446", reciever, message, nil)
+func (k *kavenegar) SendSMS(phone string, message string) error {
+	_, err := k.api.Message.Send("1000596446", []string{phone}, message, nil)
 	if err != nil {
-		fmt.Println("KAVENEGAR ERR:", reciever, err)
+		fmt.Println("KAVENEGAR ERR:", phone, err)
 	}
 	return err
 }

@@ -17,12 +17,12 @@ import (
 
 // Injectors from main.go:
 
-func Init(filename string, apiKey notification.ApikeyType) contracts.ILeviathan {
-	iConfigService := config.NewConfigService(filename)
+func Init() contracts.ILeviathan {
+	iConfigService := config.NewConfigService()
 	iLogger := logger.NewLogger(iConfigService)
 	iServerContainer := services.NewEchoServerContainer(iConfigService, iLogger)
 	iUserService := user.NewUserService()
-	iNotificationService := notification.NewKavenegar(apiKey)
+	iNotificationService := notification.NewKavenegar(iConfigService)
 	iAuth := auth.NewAuthService(iConfigService, iLogger, iUserService, iNotificationService)
 	iLeviathan := NewLeviathan(iConfigService, iLogger, iServerContainer, iUserService, iAuth)
 	return iLeviathan

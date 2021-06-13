@@ -13,7 +13,7 @@ import (
 	"github.com/mostafasolati/leviathan/user"
 )
 
-func Init(filename string, apiKey notification.ApikeyType) contracts.ILeviathan {
+func Init() contracts.ILeviathan {
 	wire.Build(
 		config.NewConfigService,
 		notification.NewKavenegar,

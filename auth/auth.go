@@ -49,7 +49,7 @@ func (s *auth) SendOTP(phone string, app string) error {
 
 	otp := s.generateOTP(phone)
 	// todo: send it via an event
-	s.notification.SendSMS(user.Phone, otp)
+	s.notification.SendSMS(user.Phone(), otp)
 	return nil
 }
 
@@ -61,50 +61,42 @@ func (s *auth) NoSendOTP(phone string) string {
 // LoginByOTP either register or login user by authenticating the otp sent in previous step
 func (s *auth) LoginByOTP(phone, code string, guestID int) (token *models.Token, err error) {
 	phone = utils.NormalizePhoneNumber(phone)
-	validator := NewValidation()
 
-	validator.PhoneNumber(phone)
-	if err := validator.Validate(); err != nil {
-		return nil, err
-	}
-
+	// todo: validate phone number
 	otp, ok := s.otpMap.Load(phone)
 	if !ok || otp.(otpType).code != code || otp.(otpType).expireAt.Before(time.Now()) {
 		return nil, contracts.ErrOTPIsIncorrect
 	}
 
-	user, err := s.storage.FindByPhone(phone)
+	user, err := s.userService.FindByPhone(phone)
 	if err != nil {
 		switch err {
-		case contracts.ErrUserNotFound:
-			// register user if not found in database
-			user = &models.User{
-				Phone: phone,
-			}
-			err = s.storage.Create(user)
-			if err != nil {
-				return nil, err
-			}
+		//case contracts.ErrUserNotFound:
+		//	// register user if not found in database
+		//	user = &models.User{
+		//		Phone: phone,
+		//	}
+		//	err = s.userService.Create(user)
+		//	if err != nil {
+		//		return nil, err
+		//	}
 
-			event.Fire(&models.UserCreatedEvent{
-				UserID:  user.ID,
-				GuestID: guestID,
-			})
 		default:
 			return nil, err
 		}
 	}
 
 	// create s new refresh token for user if not exists or expired
-	if user.RefreshTokenExpiry.Before(time.Now()) {
+	if user.RefreshTokenExpiry().Before(time.Now()) {
 		bs := make([]byte, 32)
 		rand.Read(bs)
-		user.RefreshToken = hex.EncodeToString(bs)
-		user.RefreshTokenExpiry = time.Now().Add(6 * 30 * 24 * time.Hour)
+		user.SetRefreshToken(hex.EncodeToString(bs))
+		user.SetRefreshTokenExpiry(time.Now().Add(6 * 30 * 24 * time.Hour))
 
-		if err = s.storage.Update(user); err != nil {
-			return nil, err
-		}
+		// Todo: what to do?
+		//if err = s.storage.Update(user); err != nil {
+		//	return nil, err
+		//}
 	}
 
 	accessToken, err := s.createJwtToken(user)
@@ -112,27 +104,15 @@ func (s *auth) LoginByOTP(phone, code string, guestID int) (token *models.Token,
 		return nil, err
 	}
 
-	if guestID != 0 {
-		// Remove the guest, as it is no longer needed.
-		if err = s.guestStorage.Remove(guestID); err != nil {
-			return nil, err
-		}
-	}
-
-	event.Fire(&models.UserLoggedInEvent{
-		UserID:  user.ID,
-		GuestID: guestID,
-	})
-
 	return &models.Token{
 		AccessToken:  accessToken,
-		RefreshToken: user.RefreshToken,
+		RefreshToken: user.RefreshToken(),
 	}, nil
 }
 
 // RefreshToken return a new access token based on user refresh token
 func (s *auth) RefreshToken(refreshToken string) (accessToken string, err error) {
-	user, err := s.storage.FindByRefreshToken(refreshToken)
+	user, err := s.userService.FindByRefreshToken(refreshToken)
 	if err != nil {
 		return "", err
 	}
@@ -194,21 +174,21 @@ func (s *auth) generateOTP(phone string) string {
 	return otp
 }
 
-func (s *auth) createJwtToken(user *models.User) (string, error) {
+func (s *auth) createJwtToken(user contracts.IUser) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &models.UserClaims{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Duration(s.config.Int(CPJWTExpiration)) * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(time.Duration(s.config.Int("auth.jtw.expiry")) * time.Minute).Unix(),
 		},
 
-		ID:    user.ID,
+		ID:    user.ID(),
 		Name:  user.FullName(),
 		Roles: []string{"user"},
-		Phone: user.Phone,
+		Phone: user.Phone(),
 	})
 
 	// Sign and get the complete encoded token as s string using the secret
-	tokenString, err := token.SignedString([]byte(s.config.String(CPAccountingSecret)))
+	tokenString, err := token.SignedString([]byte(s.config.String("auth.jwt.secret")))
 
 	return tokenString, err
 }
@@ -219,7 +199,7 @@ func (s *auth) parseJwtToken(accessToken string) (*models.UserClaims, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, jwt.ErrSignatureInvalid
 		}
-		return []byte(s.config.String(CPAccountingSecret)), nil
+		return []byte(s.config.String(s.config.String("auth.jwt.secret"))), nil
 	})
 	if err != nil {
 		return nil, err

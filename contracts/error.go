@@ -7,6 +7,9 @@ const (
 	ErrFileDimensionQuota = constError("width or height can't be more than 1000 pixels")
 	ErrOTPNotFound        = constError("otp not found")
 	ErrUserDeactivated    = constError("user is deactivated")
+	ErrUserNotFound       = constError("user not found")
+	ErrUnauthorized       = constError("user unauthorized")
+	ErrOTPIsIncorrect     = constError("otp is incorrect")
 )
 
 type constError string

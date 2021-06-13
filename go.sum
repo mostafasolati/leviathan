@@ -54,6 +54,8 @@ github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
 github.com/dongri/phonenumber v0.0.0-20210304071411-690733f34185 h1:beJJxulXd3qfbnWC6cuE9uqitjOw/LPxWGoBwHcATOQ=
 github.com/dongri/phonenumber v0.0.0-20210304071411-690733f34185/go.mod h1:GJJMhk5ZXm21erDZg++I5096tHuJlrJAYRPJ0yq+35E=
+github.com/elastic/go-elasticsearch v0.0.0 h1:Pd5fqOuBxKxv83b0+xOAJDAkziWYwFinWnBO0y+TZaA=
+github.com/elastic/go-elasticsearch v0.0.0/go.mod h1:TkBSJBuTyFdBnrNqoPc54FN0vKf5c04IdM4zuStJ7xg=
 github.com/elastic/go-elasticsearch/v7 v7.8.0 h1:M9D55OK13IEgg51Jb57mZgseag1AsncwAUn4C6j1vlc=
 github.com/elastic/go-elasticsearch/v7 v7.8.0/go.mod h1:OJ4wdbtDNk5g503kvlHLyErCgQwwzmDtaFC4XyOxXA4=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
